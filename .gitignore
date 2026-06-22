@@ -1,8 +1,8 @@
 build/
+dist/
 *.DS_Store
 *.xcuserstate
 *.xcuserdata/
 DerivedData/
 *.swp
 *.tmp
-

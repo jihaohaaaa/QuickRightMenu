@@ -2,8 +2,8 @@
 #import <Carbon/Carbon.h>
 #import <ImageIO/ImageIO.h>
 
-static NSString * const QRProductName = @"QuickRightMeniu";
-static NSString * const QRProductVersion = @"1.5.5";
+static NSString * const QRProductName = @"QuickRightMenu";
+static NSString * const QRProductVersion = @"1.5.6";
 
 @interface QRAppDelegate : NSObject <NSApplicationDelegate>
 @property(nonatomic, strong) NSStatusItem *statusItem;
@@ -444,7 +444,7 @@ static NSString * const QRProductVersion = @"1.5.5";
     status.frame = NSMakeRect(276, 454, 260, 30);
     [root addSubview:status];
 
-    NSTextField *detail = [self labelWithText:(enabled ? @"下次登录会自动启动 QuickRightMeniu。" : @"下次登录不会自动启动 QuickRightMeniu。") size:14 bold:NO color:NSColor.secondaryLabelColor];
+    NSTextField *detail = [self labelWithText:(enabled ? @"下次登录会自动启动 QuickRightMenu。" : @"下次登录不会自动启动 QuickRightMenu。") size:14 bold:NO color:NSColor.secondaryLabelColor];
     detail.frame = NSMakeRect(276, 420, 420, 24);
     [root addSubview:detail];
 

@@ -1,6 +1,6 @@
-# QuickRightMeniu 功能清单
+# QuickRightMenu 功能清单
 
-## 1.5.5 已完成
+## 1.5.6 已完成
 
 - 新建 TXT
 - 新建 Markdown

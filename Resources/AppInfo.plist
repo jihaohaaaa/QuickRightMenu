@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleDisplayName</key>
-    <string>QuickRightMeniu</string>
+    <string>QuickRightMenu</string>
     <key>CFBundleExecutable</key>
     <string>QuickRightMenu</string>
     <key>CFBundleIdentifier</key>
@@ -18,7 +18,7 @@
             <key>CFBundleTypeRole</key>
             <string>Editor</string>
             <key>CFBundleURLName</key>
-            <string>QuickRightMeniu Command URL</string>
+            <string>QuickRightMenu Command URL</string>
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>quickrightmenu</string>
@@ -28,13 +28,13 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>QuickRightMeniu</string>
+    <string>QuickRightMenu</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.5.5</string>
+    <string>1.5.6</string>
     <key>CFBundleVersion</key>
-    <string>24</string>
+    <string>25</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>

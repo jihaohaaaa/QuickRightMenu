@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleDisplayName</key>
-    <string>QuickRightMeniu Extension</string>
+    <string>QuickRightMenu Extension</string>
     <key>CFBundleExecutable</key>
     <string>QuickRightMenu Extension</string>
     <key>CFBundleIdentifier</key>
@@ -13,13 +13,13 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>QuickRightMeniu Extension</string>
+    <string>QuickRightMenu Extension</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.5.5</string>
+    <string>1.5.6</string>
     <key>CFBundleVersion</key>
-    <string>24</string>
+    <string>25</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSExtension</key>

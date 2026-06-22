@@ -1,6 +1,6 @@
-# QuickRightMeniu
+# QuickRightMenu
 
-QuickRightMeniu is a lightweight macOS Finder right-click menu extension. It provides quick file creation, copy/move actions, file utilities, image tools, text tools, terminal launch, and an in-app settings window.
+QuickRightMenu is a lightweight macOS Finder right-click menu extension. It provides quick file creation, copy/move actions, file utilities, image tools, text tools, terminal launch, and an in-app settings window.
 
 The app is implemented with Objective-C and FinderSync, with a small resident menu bar app that executes commands requested by the Finder extension.
 
@@ -37,13 +37,17 @@ build/QuickRightMenu.app
 
 ## Install Locally
 
+For most users, download the latest `QuickRightMenu-*-macOS.zip` from GitHub Releases, unzip it, move `QuickRightMenu.app` to `/Applications`, open it once, then enable the Finder extension in System Settings if macOS asks.
+
+For local development builds:
+
 Copy the built app somewhere stable, then register and enable the FinderSync extension:
 
 ```bash
-cp -R build/QuickRightMenu.app /Applications/QuickRightMeniu.app
-pluginkit -a "/Applications/QuickRightMeniu.app/Contents/PlugIns/QuickRightMenu Extension.appex"
+cp -R build/QuickRightMenu.app /Applications/QuickRightMenu.app
+pluginkit -a "/Applications/QuickRightMenu.app/Contents/PlugIns/QuickRightMenu Extension.appex"
 pluginkit -e use -i com.liaowenbin.QuickRightMenu.Extension
-open /Applications/QuickRightMeniu.app
+open /Applications/QuickRightMenu.app
 killall Finder
 ```
 
@@ -55,7 +59,7 @@ pluginkit -m -p com.apple.FinderSync -v
 
 ## Architecture
 
-FinderSync extensions are sandboxed and are unreliable for directly launching arbitrary workflows from menu actions. QuickRightMeniu uses a command-file bridge:
+FinderSync extensions are sandboxed and are unreliable for directly launching arbitrary workflows from menu actions. QuickRightMenu uses a command-file bridge:
 
 1. The FinderSync extension writes a `.cmd` file into the shared app container.
 2. The menu bar app polls that folder.
@@ -65,8 +69,8 @@ This keeps Finder menu handling small and avoids depending on blocked `openURL` 
 
 ## Notes
 
-- Bundle identifiers intentionally retain `QuickRightMenu` for compatibility with existing local settings and FinderSync registration.
-- The user-facing product name is `QuickRightMeniu`.
+- Bundle identifiers intentionally use `QuickRightMenu` for compatibility with existing local settings and FinderSync registration.
+- The user-facing product name is `QuickRightMenu`.
 - Office files are generated as minimal valid OpenXML packages.
 
 ## License
