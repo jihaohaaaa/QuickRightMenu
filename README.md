@@ -39,6 +39,10 @@ build/QuickRightMenu.app
 
 For most users, download the latest `QuickRightMenu-*-macOS.zip` from GitHub Releases, unzip it, move `QuickRightMenu.app` to `/Applications`, open it once, then enable the Finder extension in System Settings if macOS asks.
 
+On first launch, QuickRightMenu opens a permission guide inside the app. Follow it to enable the Finder extension, add Full Disk Access, and restart Finder.
+
+QuickRightMenu also checks GitHub Releases for updates at launch and shows an in-app update page when a newer version is available.
+
 For local development builds:
 
 Copy the built app somewhere stable, then register and enable the FinderSync extension:

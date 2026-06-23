@@ -3,7 +3,9 @@
 #import <ImageIO/ImageIO.h>
 
 static NSString * const QRProductName = @"QuickRightMenu";
-static NSString * const QRProductVersion = @"1.5.6";
+static NSString * const QRProductVersion = @"1.5.7";
+static NSString * const QRLatestReleaseAPI = @"https://api.github.com/repos/weaiw/QuickRightMenu/releases/latest";
+static NSString * const QRReleasesURL = @"https://github.com/weaiw/QuickRightMenu/releases/latest";
 
 @interface QRAppDelegate : NSObject <NSApplicationDelegate>
 @property(nonatomic, strong) NSStatusItem *statusItem;
@@ -16,6 +18,10 @@ static NSString * const QRProductVersion = @"1.5.6";
 @property(nonatomic, strong) NSPopUpButton *templatePopup;
 @property(nonatomic, strong) NSTextView *templateTextView;
 @property(nonatomic, strong) NSPopUpButton *terminalPopup;
+@property(nonatomic, copy) NSString *latestVersion;
+@property(nonatomic, copy) NSString *latestDownloadURL;
+@property(nonatomic, assign) BOOL updateAvailable;
+@property(nonatomic, assign) BOOL updateCheckFinished;
 @end
 
 @implementation QRAppDelegate
@@ -60,6 +66,9 @@ static NSString * const QRProductVersion = @"1.5.6";
     NSMenuItem *quitItem = [menu addItemWithTitle:@"退出" action:@selector(terminate:) keyEquivalent:@"q"];
     quitItem.target = NSApp;
     self.statusItem.menu = menu;
+
+    [self handleFirstLaunchGuideIfNeeded];
+    [self checkForUpdatesSilently];
 }
 
 - (NSImage *)appIconImage {
@@ -145,6 +154,7 @@ static NSString * const QRProductVersion = @"1.5.6";
     };
     [defaults addEntriesFromDictionary:templates];
     defaults[@"terminalPreference"] = @"terminal";
+    defaults[@"hasSeenPermissionGuide"] = @NO;
     for (NSInteger i = 1; i <= 3; i++) {
         defaults[[NSString stringWithFormat:@"favoriteDir%ldName", (long)i]] = @"";
         defaults[[NSString stringWithFormat:@"favoriteDir%ldPath", (long)i]] = @"";
@@ -190,6 +200,15 @@ static NSString * const QRProductVersion = @"1.5.6";
     [self.settingsWindow makeKeyAndOrderFront:nil];
 }
 
+- (void)handleFirstLaunchGuideIfNeeded {
+    if (![self.settings[@"hasSeenPermissionGuide"] boolValue]) {
+        self.settingsPage = @"permissions";
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self showSettings:nil];
+        });
+    }
+}
+
 - (NSWindow *)buildSettingsWindow {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 900, 620)
                                                   styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable)
@@ -226,14 +245,16 @@ static NSString * const QRProductVersion = @"1.5.6";
     [sidebar addSubview:version];
 
     NSArray<NSDictionary<NSString *, NSString *> *> *navItems = @[
+        @{@"page": @"permissions", @"title": @"权限指引", @"detail": @"首次安装必看"},
         @{@"page": @"menu", @"title": @"右键菜单", @"detail": @"菜单开关"},
         @{@"page": @"templates", @"title": @"文件模板", @"detail": @"新建内容默认值"},
         @{@"page": @"favorites", @"title": @"常用目录", @"detail": @"复制 / 移动快捷目录"},
         @{@"page": @"terminal", @"title": @"终端偏好", @"detail": @"Terminal / iTerm2 / Warp"},
-        @{@"page": @"login", @"title": @"开机启动", @"detail": [self isLoginItemEnabled] ? @"已开启" : @"未开启"}
+        @{@"page": @"login", @"title": @"开机启动", @"detail": [self isLoginItemEnabled] ? @"已开启" : @"未开启"},
+        @{@"page": @"update", @"title": @"软件更新", @"detail": self.updateAvailable ? @"发现新版本" : @"GitHub Release"}
     ];
     for (NSInteger i = 0; i < navItems.count; i++) {
-        NSView *navRow = [[NSView alloc] initWithFrame:NSMakeRect(18, 396 - i * 50, 200, 42)];
+        NSView *navRow = [[NSView alloc] initWithFrame:NSMakeRect(18, 402 - i * 46, 200, 40)];
         navRow.wantsLayer = YES;
         if ([navItems[i][@"page"] isEqualToString:self.settingsPage]) {
             navRow.layer.backgroundColor = [NSColor colorWithCalibratedRed:0.17 green:0.21 blue:0.31 alpha:1.0].CGColor;
@@ -241,11 +262,11 @@ static NSString * const QRProductVersion = @"1.5.6";
         }
 
         NSTextField *navTitle = [self labelWithText:navItems[i][@"title"] size:13 bold:YES color:NSColor.whiteColor];
-        navTitle.frame = NSMakeRect(12, 19, 170, 18);
+        navTitle.frame = NSMakeRect(12, 18, 170, 18);
         [navRow addSubview:navTitle];
 
         NSTextField *navDetail = [self labelWithText:navItems[i][@"detail"] size:10 bold:NO color:[NSColor colorWithWhite:0.70 alpha:1]];
-        navDetail.frame = NSMakeRect(12, 6, 170, 14);
+        navDetail.frame = NSMakeRect(12, 5, 170, 14);
         [navRow addSubview:navDetail];
 
         NSButton *navButton = [[NSButton alloc] initWithFrame:navRow.bounds];
@@ -279,7 +300,9 @@ static NSString * const QRProductVersion = @"1.5.6";
 }
 
 - (void)addSettingsContentToView:(NSView *)root {
-    if ([self.settingsPage isEqualToString:@"templates"]) {
+    if ([self.settingsPage isEqualToString:@"permissions"]) {
+        [self addPermissionGuidePageToView:root];
+    } else if ([self.settingsPage isEqualToString:@"templates"]) {
         [self addTemplatePageToView:root];
     } else if ([self.settingsPage isEqualToString:@"favorites"]) {
         [self addFavoriteDirectoryPageToView:root];
@@ -287,6 +310,8 @@ static NSString * const QRProductVersion = @"1.5.6";
         [self addTerminalPageToView:root];
     } else if ([self.settingsPage isEqualToString:@"login"]) {
         [self addLoginPageToView:root];
+    } else if ([self.settingsPage isEqualToString:@"update"]) {
+        [self addUpdatePageToView:root];
     } else {
         [self addMenuPageToView:root];
     }
@@ -300,6 +325,74 @@ static NSString * const QRProductVersion = @"1.5.6";
     NSTextField *hintLabel = [self labelWithText:hint size:14 bold:NO color:NSColor.secondaryLabelColor];
     hintLabel.frame = NSMakeRect(276, 524, 580, 24);
     [root addSubview:hintLabel];
+}
+
+- (void)addPermissionGuidePageToView:(NSView *)root {
+    [self addPageTitle:@"权限指引" hint:@"首次安装后按顺序完成下面几步，Finder 右键菜单才能稳定显示并执行文件操作。" toView:root];
+
+    NSArray<NSDictionary<NSString *, NSString *> *> *steps = @[
+        @{@"title": @"1. 打开一次 QuickRightMenu", @"detail": @"如果 macOS 提示来自未认证开发者，在“隐私与安全性”底部点“仍要打开”。"},
+        @{@"title": @"2. 启用 Finder 扩展", @"detail": @"进入系统设置里的 Finder 扩展，打开 QuickRightMenu Extension。"},
+        @{@"title": @"3. 添加完全磁盘访问权限", @"detail": @"进入完全磁盘访问，添加并打开 QuickRightMenu，避免复制、移动、创建文件时被系统拦截。"},
+        @{@"title": @"4. 重启 Finder", @"detail": @"完成权限设置后重启 Finder，再在 Finder 空白处或文件上右键测试。"}
+    ];
+
+    for (NSInteger i = 0; i < steps.count; i++) {
+        CGFloat y = 466 - i * 76;
+        NSTextField *title = [self labelWithText:steps[i][@"title"] size:15 bold:YES color:NSColor.labelColor];
+        title.frame = NSMakeRect(276, y, 360, 24);
+        [root addSubview:title];
+
+        NSTextField *detail = [self labelWithText:steps[i][@"detail"] size:13 bold:NO color:NSColor.secondaryLabelColor];
+        detail.frame = NSMakeRect(276, y - 24, i == 0 ? 560 : 360, 22);
+        [root addSubview:detail];
+
+        if (i == 1) {
+            NSButton *extensions = [NSButton buttonWithTitle:@"打开 Finder 扩展设置" target:self action:@selector(openFinderExtensionSettings:)];
+            extensions.frame = NSMakeRect(660, y - 6, 176, 32);
+            [root addSubview:extensions];
+        } else if (i == 2) {
+            NSButton *disk = [NSButton buttonWithTitle:@"打开完全磁盘访问" target:self action:@selector(openFullDiskAccessSettings:)];
+            disk.frame = NSMakeRect(672, y - 6, 164, 32);
+            [root addSubview:disk];
+        } else if (i == 3) {
+            NSButton *restart = [NSButton buttonWithTitle:@"重启 Finder" target:self action:@selector(restartFinder:)];
+            restart.frame = NSMakeRect(716, y - 6, 120, 32);
+            [root addSubview:restart];
+        }
+    }
+
+    NSButton *done = [NSButton buttonWithTitle:@"已完成，不再自动显示" target:self action:@selector(markPermissionGuideSeen:)];
+    done.frame = NSMakeRect(276, 76, 170, 34);
+    [root addSubview:done];
+}
+
+- (void)addUpdatePageToView:(NSView *)root {
+    [self addPageTitle:@"软件更新" hint:@"启动后会自动检查 GitHub Release。发现新版本时会在这里提示下载。" toView:root];
+
+    NSString *statusText = @"正在检查更新...";
+    if (self.updateAvailable) {
+        statusText = [NSString stringWithFormat:@"发现新版本：%@（当前 %@）", self.latestVersion ?: @"未知版本", QRProductVersion];
+    } else if (self.updateCheckFinished) {
+        statusText = [NSString stringWithFormat:@"当前已是最新版本：%@", QRProductVersion];
+    }
+
+    NSTextField *status = [self labelWithText:statusText size:18 bold:YES color:NSColor.labelColor];
+    status.frame = NSMakeRect(276, 454, 500, 30);
+    [root addSubview:status];
+
+    NSString *detailText = self.updateAvailable ? @"点击下载会打开 GitHub Release 页面。下载 zip 后替换应用程序里的 QuickRightMenu.app 即可。" : @"也可以手动打开 Release 页面查看历史版本。";
+    NSTextField *detail = [self labelWithText:detailText size:14 bold:NO color:NSColor.secondaryLabelColor];
+    detail.frame = NSMakeRect(276, 418, 560, 24);
+    [root addSubview:detail];
+
+    NSButton *check = [NSButton buttonWithTitle:@"立即检查" target:self action:@selector(checkForUpdatesManually:)];
+    check.frame = NSMakeRect(276, 362, 100, 34);
+    [root addSubview:check];
+
+    NSButton *download = [NSButton buttonWithTitle:(self.updateAvailable ? @"下载新版本" : @"打开 Release") target:self action:@selector(openReleasePage:)];
+    download.frame = NSMakeRect(388, 362, 120, 34);
+    [root addSubview:download];
 }
 
 - (void)addMenuPageToView:(NSView *)root {
@@ -465,6 +558,54 @@ static NSString * const QRProductVersion = @"1.5.6";
     [self saveSettings];
 }
 
+- (void)markPermissionGuideSeen:(id)sender {
+    self.settings[@"hasSeenPermissionGuide"] = @YES;
+    [self saveSettings];
+    self.settingsPage = @"menu";
+    [self rebuildSettingsWindow];
+}
+
+- (void)openFinderExtensionSettings:(id)sender {
+    [self openSystemSettingsURLString:@"x-apple.systempreferences:com.apple.ExtensionsPreferences"];
+}
+
+- (void)openFullDiskAccessSettings:(id)sender {
+    [self openSystemSettingsURLString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"];
+}
+
+- (void)restartFinder:(id)sender {
+    NSTask *task = [[NSTask alloc] init];
+    task.launchPath = @"/usr/bin/killall";
+    task.arguments = @[@"Finder"];
+    @try {
+        [task launch];
+    } @catch (NSException *exception) {
+        [self showError:exception.reason ?: @"重启 Finder 失败"];
+    }
+}
+
+- (void)openSystemSettingsURLString:(NSString *)urlString {
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (url) {
+        [[NSWorkspace sharedWorkspace] openURL:url];
+    }
+}
+
+- (void)checkForUpdatesManually:(id)sender {
+    self.updateCheckFinished = NO;
+    self.settingsPage = @"update";
+    [self rebuildSettingsWindow];
+    [self checkForUpdatesSilently];
+}
+
+- (void)openReleasePage:(id)sender {
+    NSString *urlString = self.latestDownloadURL.length > 0 ? self.latestDownloadURL : QRReleasesURL;
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (url) {
+        [[NSWorkspace sharedWorkspace] openURL:url];
+    }
+}
+
 - (void)enableAllSettings:(id)sender {
     for (NSDictionary<NSString *, NSString *> *row in [self featureRows]) {
         self.settings[row[@"key"]] = @YES;
@@ -481,6 +622,96 @@ static NSString * const QRProductVersion = @"1.5.6";
     [self.settingsWindow close];
     self.settingsWindow = [self buildSettingsWindow];
     [self.settingsWindow makeKeyAndOrderFront:nil];
+}
+
+- (void)checkForUpdatesSilently {
+    NSURL *url = [NSURL URLWithString:QRLatestReleaseAPI];
+    if (!url) {
+        return;
+    }
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:url cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:12];
+    [[[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error || data.length == 0) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                self.updateCheckFinished = YES;
+                if ([self.settingsPage isEqualToString:@"update"]) {
+                    [self rebuildSettingsWindow];
+                }
+            });
+            return;
+        }
+
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        if (![json isKindOfClass:NSDictionary.class]) {
+            return;
+        }
+        NSString *tag = json[@"tag_name"];
+        NSString *htmlURL = json[@"html_url"];
+        NSString *version = [self normalizedVersionFromTag:tag];
+        NSString *downloadURL = [self downloadURLFromReleaseJSON:json fallback:htmlURL];
+        BOOL isNewer = [self isVersion:version newerThanVersion:QRProductVersion];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.latestVersion = version;
+            self.latestDownloadURL = downloadURL;
+            self.updateAvailable = isNewer;
+            self.updateCheckFinished = YES;
+            if (isNewer) {
+                self.settingsPage = @"update";
+                [self showSettings:nil];
+            } else if ([self.settingsPage isEqualToString:@"update"]) {
+                [self rebuildSettingsWindow];
+            }
+        });
+    }] resume];
+}
+
+- (NSString *)normalizedVersionFromTag:(NSString *)tag {
+    if (![tag isKindOfClass:NSString.class]) {
+        return nil;
+    }
+    if ([tag hasPrefix:@"v"] || [tag hasPrefix:@"V"]) {
+        return [tag substringFromIndex:1];
+    }
+    return tag;
+}
+
+- (NSString *)downloadURLFromReleaseJSON:(NSDictionary *)json fallback:(NSString *)fallback {
+    NSArray *assets = json[@"assets"];
+    if ([assets isKindOfClass:NSArray.class]) {
+        for (NSDictionary *asset in assets) {
+            if (![asset isKindOfClass:NSDictionary.class]) {
+                continue;
+            }
+            NSString *name = asset[@"name"];
+            NSString *url = asset[@"browser_download_url"];
+            if ([name containsString:@"macOS.zip"] && [url isKindOfClass:NSString.class]) {
+                return url;
+            }
+        }
+    }
+    return [fallback isKindOfClass:NSString.class] ? fallback : QRReleasesURL;
+}
+
+- (BOOL)isVersion:(NSString *)candidate newerThanVersion:(NSString *)current {
+    if (candidate.length == 0 || current.length == 0) {
+        return NO;
+    }
+    NSArray<NSString *> *left = [candidate componentsSeparatedByString:@"."];
+    NSArray<NSString *> *right = [current componentsSeparatedByString:@"."];
+    NSInteger count = MAX(left.count, right.count);
+    for (NSInteger i = 0; i < count; i++) {
+        NSInteger a = i < left.count ? left[i].integerValue : 0;
+        NSInteger b = i < right.count ? right[i].integerValue : 0;
+        if (a > b) {
+            return YES;
+        }
+        if (a < b) {
+            return NO;
+        }
+    }
+    return NO;
 }
 
 - (void)pollCommandFiles:(NSTimer *)timer {
