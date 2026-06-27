@@ -22,31 +22,10 @@ struct QuickRightMenuApp: App {
         } label: {
             Image(systemName: "contextualmenu.and.cursorarrow")
         }
-        
-        Window("QuickRightMenu 设置", id: "settings") {
-            SettingsView()
-                .frame(minWidth: 900, minHeight: 600)
-                .onAppear {
-                    // 标记用户已看过权限指引
-                    if !(settingsManager.settings["hasSeenPermissionGuide"] as? Bool ?? false) {
-                        settingsManager.settings["hasSeenPermissionGuide"] = true
-                        settingsManager.saveSettings()
-                    }
-                }
-        }
-        .windowStyle(.titleBar)
-        .windowResizability(.contentSize)
     }
     
     private func showSettingsWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        // 在 macOS 13+ 中，我们可以利用原生方式激活 Window 场景
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "settings" }) {
-            window.makeKeyAndOrderFront(nil)
-        } else {
-            // 如果没找到，尝试发送 showSettingsWindow 动作
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        }
+        SettingsWindowController.shared.show()
     }
 }
 
@@ -75,8 +54,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hasSeenGuide = SettingsManager.shared.settings["hasSeenPermissionGuide"] as? Bool ?? false
         if !hasSeenGuide {
             DispatchQueue.main.async {
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                SettingsWindowController.shared.show()
             }
         }
     }
@@ -798,6 +776,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.activate(ignoringOtherApps: true)
             alert.runModal()
         }
+    }
+}
+
+// MARK: - Settings Window Controller
+
+class SettingsWindowController: NSObject, NSWindowDelegate {
+    static let shared = SettingsWindowController()
+    private var window: NSWindow?
+    
+    func show() {
+        if let window = window {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        
+        let settingsView = SettingsView()
+            .onAppear {
+                let manager = SettingsManager.shared
+                if !(manager.settings["hasSeenPermissionGuide"] as? Bool ?? false) {
+                    manager.settings["hasSeenPermissionGuide"] = true
+                    manager.saveSettings()
+                }
+            }
+        
+        let hostingView = NSHostingView(rootView: settingsView)
+        let newWindow = NSWindow(
+            contentRect: NSMakeRect(0, 0, 950, 650),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        newWindow.title = "QuickRightMenu 设置"
+        newWindow.contentView = hostingView
+        newWindow.center()
+        newWindow.isReleasedWhenClosed = false
+        newWindow.delegate = self
+        
+        self.window = newWindow
+        newWindow.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    func windowWillClose(_ notification: Notification) {
+        // 关闭时清理，下次点击重新创建
+        self.window = nil
     }
 }
 

@@ -35,6 +35,7 @@ swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macos27.0 \
   -O \
+  "$ROOT/Sources/FinderExtension/main.swift" \
   "$ROOT/Sources/FinderExtension/FinderSync.swift" \
   -o "$EXT/Contents/MacOS/QuickRightMenu Extension"
 
