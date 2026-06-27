@@ -23,28 +23,19 @@ if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
   cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 fi
 
-clang \
-  -isysroot "$SDK" \
-  -target arm64-apple-macos13.0 \
-  -fmodules \
-  -fmodules-cache-path="$MODULE_CACHE" \
-  -fobjc-arc \
-  -framework Cocoa \
-  -framework ImageIO \
-  "$ROOT/Sources/App/main.m" \
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos27.0 \
+  -O \
+  "$ROOT/Sources/App/QuickRightMenuApp.swift" \
+  "$ROOT/Sources/App/SettingsView.swift" \
   -o "$APP/Contents/MacOS/QuickRightMenu"
 
-clang \
-  -isysroot "$SDK" \
-  -target arm64-apple-macos13.0 \
-  -fmodules \
-  -fmodules-cache-path="$MODULE_CACHE" \
-  -fobjc-arc \
-  -framework Cocoa \
-  -framework FinderSync \
-  -framework Foundation \
-  "$ROOT/Sources/FinderExtension/main.m" \
-  "$ROOT/Sources/FinderExtension/FinderSync.m" \
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos27.0 \
+  -O \
+  "$ROOT/Sources/FinderExtension/FinderSync.swift" \
   -o "$EXT/Contents/MacOS/QuickRightMenu Extension"
 
 /usr/libexec/PlistBuddy -c "Set :NSExtension:NSExtensionPrincipalClass FinderSync" "$EXT/Contents/Info.plist"
