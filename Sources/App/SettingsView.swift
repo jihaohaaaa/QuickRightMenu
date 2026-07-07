@@ -1,6 +1,30 @@
 import SwiftUI
 import Cocoa
 
+// MARK: - Premium Color System & UI Modifiers
+
+struct PremiumCardModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(NSColor.windowBackgroundColor).opacity(0.4))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
+    }
+}
+
+extension View {
+    func premiumCardStyle() -> some View {
+        self.modifier(PremiumCardModifier())
+    }
+}
+
 // MARK: - Update Manager
 
 class UpdateManager: ObservableObject {
@@ -66,47 +90,94 @@ class UpdateManager: ObservableObject {
     }
 }
 
-// MARK: - Main Settings View
+// MARK: - Main Settings View (Premium UI/UX)
 
 struct SettingsView: View {
-    @State private var selection: String = "menu"
+    @State private var selection: String = "permissions"
+    
+    private let primaryGradient = LinearGradient(
+        colors: [Color.blue, Color.purple],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
     
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
-                Section("引导") {
-                    NavigationLink(value: "permissions") {
-                        Label("权限指引", systemImage: "hand.raised.fill")
+            VStack(alignment: .leading, spacing: 0) {
+                // Brand Header with Premium Gradient
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "contextualmenu.and.cursorarrow")
+                            .font(.title)
+                            .foregroundStyle(primaryGradient)
+                        
+                        Text("QuickRightMenu")
+                            .font(.title3)
+                            .bold()
+                            .foregroundStyle(.primary)
+                    }
+                    Text("极速访达右键增强工具")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
+                .padding(.bottom, 20)
+                
+                Divider()
+                    .padding(.horizontal, 16)
+                
+                List(selection: $selection) {
+                    Section("引导") {
+                        NavigationLink(value: "permissions") {
+                            Label("权限指引", systemImage: "hand.raised.fill")
+                        }
+                    }
+                    Section("配置偏好") {
+                        NavigationLink(value: "menu") {
+                            Label("右键菜单", systemImage: "list.bullet.rectangle.portrait.fill")
+                        }
+                        NavigationLink(value: "templates") {
+                            Label("文件模板", systemImage: "doc.text.fill")
+                        }
+                        NavigationLink(value: "favorites") {
+                            Label("常用目录", systemImage: "star.fill")
+                        }
+                        NavigationLink(value: "terminal") {
+                            Label("终端偏好", systemImage: "terminal.fill")
+                        }
+                    }
+                    Section("系统信息") {
+                        NavigationLink(value: "login") {
+                            Label("开机启动", systemImage: "power")
+                        }
+                        NavigationLink(value: "update") {
+                            Label("软件更新", systemImage: "arrow.clockwise.circle.fill")
+                        }
                     }
                 }
-                Section("设置") {
-                    NavigationLink(value: "menu") {
-                        Label("右键菜单", systemImage: "list.bullet.rectangle")
-                    }
-                    NavigationLink(value: "templates") {
-                        Label("文件模板", systemImage: "doc.text.fill")
-                    }
-                    NavigationLink(value: "favorites") {
-                        Label("常用目录", systemImage: "star.fill")
-                    }
-                    NavigationLink(value: "terminal") {
-                        Label("终端偏好", systemImage: "terminal.fill")
-                    }
-                }
-                Section("系统") {
-                    NavigationLink(value: "login") {
-                        Label("开机启动", systemImage: "power")
-                    }
-                    NavigationLink(value: "update") {
-                        Label("软件更新", systemImage: "arrow.clockwise.circle.fill")
-                    }
-                }
+                .listStyle(.sidebar)
             }
-            .listStyle(.sidebar)
-            .navigationTitle("设置导航")
+            .background(.ultraThinMaterial)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 260)
         } detail: {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 28) {
+                    // Header Area of selected panel
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(titleForSelection(selection))
+                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                                .foregroundStyle(primaryGradient)
+                            Text(descForSelection(selection))
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(.bottom, 8)
+                    
+                    // Specific View Content
                     switch selection {
                     case "permissions":
                         PermissionGuideView()
@@ -123,114 +194,146 @@ struct SettingsView: View {
                     case "update":
                         UpdateView()
                     default:
-                        Text("请选择一个选项")
+                        Text("请在侧边栏选择配置项")
                     }
                 }
-                .padding(32)
+                .padding(36)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .navigationTitle(titleForSelection(selection))
+            .background(
+                Color(NSColor.windowBackgroundColor)
+                    .overlay(
+                        RadialGradient(
+                            colors: [Color.blue.opacity(0.04), Color.purple.opacity(0.04), Color.clear],
+                            center: .topTrailing,
+                            startRadius: 0,
+                            endRadius: 500
+                        )
+                    )
+            )
         }
     }
     
     private func titleForSelection(_ sel: String) -> String {
         switch sel {
-        case "permissions": return "权限指引"
-        case "menu": return "右键菜单"
-        case "templates": return "文件模板"
-        case "favorites": return "常用目录"
-        case "terminal": return "终端偏好"
-        case "login": return "开机启动"
-        case "update": return "软件更新"
+        case "permissions": return "权限配置指引"
+        case "menu": return "右键功能开关"
+        case "templates": return "文件新建模板"
+        case "favorites": return "常用目标目录"
+        case "terminal": return "集成终端偏好"
+        case "login": return "系统开机自启"
+        case "update": return "软件版本检查"
         default: return "设置"
+        }
+    }
+    
+    private func descForSelection(_ sel: String) -> String {
+        switch sel {
+        case "permissions": return "确保权限完整配置，使得右键菜单加载及后台文件操作畅通无阻。"
+        case "menu": return "动态配置您想展示的快捷命令，可选择分类开启/关闭。"
+        case "templates": return "定义新建各类型文本文件时的预填入模板内容。"
+        case "favorites": return "添加至多三个快速文件夹，直接呼出“复制到”/“移动到”二级菜单。"
+        case "terminal": return "设置“在终端打开”功能触发时，默认调用的终端应用类型。"
+        case "login": return "开启后在系统每次登录时自动运行后台轮询守护进程。"
+        case "update": return "在线检测 GitHub 最新 release，一键下载并覆盖安装最新版本。"
+        default: return ""
         }
     }
 }
 
-// MARK: - Subviews
+// MARK: - Premium Subviews
 
 // 1. Permission Guide
 struct PermissionGuideView: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("首次安装后按顺序完成下面几步，Finder 右键菜单才能稳定显示并执行文件操作。")
-                .foregroundColor(.secondary)
-                .font(.body)
-                .padding(.bottom, 8)
-            
+        VStack(alignment: .leading, spacing: 20) {
             stepRow(
                 num: "1",
-                title: "打开一次 QuickRightMenu",
-                desc: "如果 macOS 提示来自未认证开发者，请前往系统设置的“隐私与安全性”底部点击“仍要打开”。"
+                title: "启动宿主应用授权",
+                desc: "如果是首次运行，系统安全层可能会弹出提示，请至“系统设置 -> 隐私与安全性”底部点击“仍要打开”以完成软件认证。"
             )
             
             stepRow(
                 num: "2",
-                title: "启用 Finder 扩展",
-                desc: "启用后插件才能在访达的右键菜单中渲染出功能选项。",
-                actionButton: Button("打开 Finder 扩展设置") {
-                    openSystemSettings(url: "x-apple.systempreferences:com.apple.ExtensionsPreferences")
+                title: "激活访达插件扩展",
+                desc: "启用 Finder Sync 插件，使 QuickRightMenu 能够在桌面的右键菜单中渲染出功能选项。",
+                buttonTitle: "跳转开启扩展设置",
+                buttonIcon: "arrow.up.forward.app.fill",
+                action: {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.ExtensionsPreferences")!)
                 }
             )
             
             stepRow(
                 num: "3",
-                title: "添加完全磁盘访问权限",
-                desc: "进入“完全磁盘访问”打开本软件开关，避免创建、复制、移动文件时被系统安全层拦截。",
-                actionButton: Button("打开完全磁盘访问") {
-                    openSystemSettings(url: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
+                title: "授予完全磁盘访问权限",
+                desc: "赋予主应用磁盘访问权限，避免跨沙盒创建文件、复制和剪切文件夹时被系统权限拦截阻挡。",
+                buttonTitle: "跳转完全磁盘访问权限",
+                buttonIcon: "lock.shield.fill",
+                action: {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
                 }
             )
             
             stepRow(
                 num: "4",
-                title: "重启 Finder 生效",
-                desc: "完成上述权限配置后，重启访达进程，然后就可以在桌面或 Finder 中测试右键菜单了。",
-                actionButton: Button("重启 Finder") {
-                    restartFinder()
+                title: "重启 Finder 进程生效",
+                desc: "配置完成后，必须重新启动一次访达进程以清空系统缓存，使扩展和右键菜单项目重新渲染载入。",
+                buttonTitle: "立即重启 Finder",
+                buttonIcon: "arrow.clockwise.circle.fill",
+                action: {
+                    let task = Process()
+                    task.launchPath = "/usr/bin/killall"
+                    task.arguments = ["Finder"]
+                    try? task.run()
                 }
             )
         }
     }
     
+    @State private var isHoveringButton = false
+    
     @ViewBuilder
-    private func stepRow(num: String, title: String, desc: String, actionButton: Button<Text>? = nil) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+    private func stepRow(num: String, title: String, desc: String, buttonTitle: String? = nil, buttonIcon: String? = nil, action: (() -> Void)? = nil) -> some View {
+        HStack(alignment: .top, spacing: 16) {
             Text(num)
-                .font(.title2)
+                .font(.system(.title3, design: .rounded))
                 .bold()
                 .foregroundColor(.white)
                 .frame(width: 32, height: 32)
-                .background(Circle().fill(Color.blue))
+                .background(
+                    Circle()
+                        .fill(LinearGradient(colors: [Color.blue, Color.indigo], startPoint: .top, endPoint: .bottom))
+                )
+                .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
             
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(.headline)
+                    .fontWeight(.semibold)
+                
                 Text(desc)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                    .lineSpacing(4)
                 
-                if let btn = actionButton {
-                    btn
-                        .buttonStyle(.borderedProminent)
-                        .padding(.top, 4)
+                if let btnTitle = buttonTitle, let act = action {
+                    Button(action: act) {
+                        HStack {
+                            if let icon = buttonIcon {
+                                Image(systemName: icon)
+                            }
+                            Text(btnTitle)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(num == "4" ? Color.red.opacity(0.85) : Color.blue.opacity(0.85))
+                    .padding(.top, 6)
                 }
             }
+            Spacer()
         }
-        .padding(.vertical, 4)
-    }
-    
-    private func openSystemSettings(url: String) {
-        if let nsURL = URL(string: url) {
-            NSWorkspace.shared.open(nsURL)
-        }
-    }
-    
-    private func restartFinder() {
-        let task = Process()
-        task.launchPath = "/usr/bin/killall"
-        task.arguments = ["Finder"]
-        try? task.run()
+        .premiumCardStyle()
     }
 }
 
@@ -243,47 +346,68 @@ struct MenuView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("勾选后将显示在访达右键菜单中。新建文件、复制到、移动到会折叠至二级菜单中。")
-                .foregroundColor(.secondary)
-                .font(.subheadline)
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(spacing: 12) {
+                Button(action: {
+                    for row in manager.featureRows {
+                        manager.settings[row.key] = true
+                    }
+                    manager.saveSettings()
+                }) {
+                    Label("全部启用", systemImage: "checkmark.circle.fill")
+                }
+                .buttonStyle(.bordered)
+                
+                Button(action: {
+                    manager.settings = manager.defaultSettings()
+                    manager.saveSettings()
+                }) {
+                    Label("恢复默认值", systemImage: "arrow.uturn.backward.circle.fill")
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.bottom, 4)
             
             ForEach(categories, id: \.self) { cat in
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text(cat)
                         .font(.headline)
+                        .fontWeight(.bold)
                         .foregroundColor(.blue)
-                        .padding(.top, 8)
+                        .padding(.horizontal, 4)
                     
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 180))], spacing: 10) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 180, maximum: 240))], spacing: 12) {
                         ForEach(manager.featureRows.filter { $0.category == cat }) { row in
-                            Toggle(row.title, isOn: Binding(
+                            Toggle(isOn: Binding(
                                 get: { manager.settings[row.key] as? Bool ?? true },
                                 set: { val in
                                     manager.settings[row.key] = val
                                     manager.saveSettings()
                                 }
-                            ))
+                            )) {
+                                Text(row.title)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                            }
                             .toggleStyle(.checkbox)
+                            .padding(10)
+                            .background(Color(NSColor.controlBackgroundColor).opacity(0.2))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                            )
                         }
                     }
                 }
+                .padding(16)
+                .background(Color(NSColor.windowBackgroundColor).opacity(0.3))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
             }
-            
-            HStack(spacing: 12) {
-                Button("全部启用") {
-                    for row in manager.featureRows {
-                        manager.settings[row.key] = true
-                    }
-                    manager.saveSettings()
-                }
-                
-                Button("恢复默认") {
-                    manager.settings = manager.defaultSettings()
-                    manager.saveSettings()
-                }
-            }
-            .padding(.top, 16)
         }
     }
 }
@@ -297,14 +421,12 @@ struct TemplatesView: View {
     private let extensions = ["txt", "md", "json", "csv", "html", "yaml", "xml", "sh", "py", "js", "ts", "css"]
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("选择文件类型并直接编辑默认内容。新建文件时将以此内容作为模板填充。")
-                .foregroundColor(.secondary)
-                .font(.subheadline)
-            
-            HStack {
-                Text("文件类型:")
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 12) {
+                Text("选择扩展名:")
                     .bold()
+                    .font(.subheadline)
+                
                 Picker("", selection: $selectedExt) {
                     ForEach(extensions, id: \.self) { ext in
                         Text(ext.uppercased()).tag(ext)
@@ -314,31 +436,50 @@ struct TemplatesView: View {
                 .onChange(of: selectedExt, initial: true) { _, newExt in
                     loadTemplateContent(for: newExt)
                 }
-            }
-            
-            TextEditor(text: $templateContent)
-                .font(.system(.body, design: .monospaced))
-                .frame(height: 280)
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
-            
-            HStack(spacing: 12) {
-                Button("保存模板") {
-                    let key = "template_\(selectedExt)"
-                    manager.settings[key] = templateContent
-                    manager.saveSettings()
-                }
-                .buttonStyle(.borderedProminent)
                 
-                Button("恢复默认") {
+                Spacer()
+                
+                Button(action: {
                     let key = "template_\(selectedExt)"
                     if let defaultVal = manager.defaultSettings()[key] as? String {
                         templateContent = defaultVal
                         manager.settings[key] = defaultVal
                         manager.saveSettings()
                     }
+                }) {
+                    Label("重置为默认模板", systemImage: "arrow.counterclockwise")
                 }
+                .buttonStyle(.bordered)
             }
+            .padding(.horizontal, 4)
+            
+            TextEditor(text: $templateContent)
+                .font(.system(.body, design: .monospaced))
+                .padding(12)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+                .cornerRadius(8)
+                .frame(height: 320)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+            
+            Button(action: {
+                let key = "template_\(selectedExt)"
+                manager.settings[key] = templateContent
+                manager.saveSettings()
+            }) {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                    Text("保存模板内容")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.blue)
         }
+        .premiumCardStyle()
     }
     
     private func loadTemplateContent(for ext: String) {
@@ -353,10 +494,6 @@ struct FavoritesView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("设置常用目录后，它会显示在右键的“复制到”和“移动到”二级菜单中。")
-                .foregroundColor(.secondary)
-                .font(.subheadline)
-            
             ForEach(1...3, id: \.self) { i in
                 let nameKey = "favoriteDir\(i)Name"
                 let pathKey = "favoriteDir\(i)Path"
@@ -364,45 +501,70 @@ struct FavoritesView: View {
                 let path = manager.settings[pathKey] as? String ?? ""
                 
                 HStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("常用槽位 \(i)")
-                            .font(.headline)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "\(i).circle.fill")
+                                .foregroundColor(.blue)
+                                .font(.title3)
+                            Text("常用目标槽位 \(i)")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                        }
+                        
                         if !path.isEmpty {
-                            Text("\(name) (\(path))")
-                                .font(.subheadline)
-                                .foregroundColor(.primary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(name)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Text(path)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 28)
                         } else {
-                            Text("未设置目录")
+                            Text("未绑定任何目录。右键菜单中该槽位将被隐藏。")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
+                                .padding(.leading, 28)
                         }
                     }
                     
                     Spacer()
                     
-                    Button("选择文件夹") {
+                    Button(action: {
                         chooseFolder(forSlot: i)
+                    }) {
+                        Label(path.isEmpty ? "设定目录" : "重新选取", systemImage: "folder.fill.badge.plus")
                     }
+                    .buttonStyle(.bordered)
                 }
-                .padding()
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
+                .padding(18)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.15))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
             }
             
-            Button("清空全部") {
+            Button(action: {
                 for i in 1...3 {
                     manager.settings["favoriteDir\(i)Name"] = ""
                     manager.settings["favoriteDir\(i)Path"] = ""
                 }
                 manager.saveSettings()
+            }) {
+                Label("清空所有槽位", systemImage: "trash")
             }
             .buttonStyle(.bordered)
-            .padding(.top, 8)
+            .foregroundColor(.red)
+            .padding(.top, 4)
         }
     }
     
     private func chooseFolder(forSlot slot: Int) {
         let panel = NSOpenPanel()
-        panel.title = "选择常用文件夹"
+        panel.title = "选择常用目标路径"
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
@@ -425,25 +587,22 @@ struct TerminalView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("设置“在终端打开”功能所使用的终端类型。")
-                .foregroundColor(.secondary)
-                .font(.subheadline)
-            
-            Picker("默认终端: ", selection: $selection) {
-                Text("Terminal.app").tag("terminal")
+            Picker("默认终端应用: ", selection: $selection) {
+                Text("系统终端 (Terminal.app)").tag("terminal")
                 Text("iTerm2.app").tag("iterm")
                 Text("Warp.app").tag("warp")
             }
             .pickerStyle(.radioGroup)
             .onChange(of: selection, initial: true) { _, newSel in
-                // 在加载或变化时保存
                 manager.settings["terminalPreference"] = newSel
                 manager.saveSettings()
             }
             .onAppear {
                 selection = manager.settings["terminalPreference"] as? String ?? "terminal"
             }
+            .padding(8)
         }
+        .premiumCardStyle()
     }
 }
 
@@ -453,19 +612,41 @@ struct LoginView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("开机后自动登录 macOS 时是否自动运行 QuickRightMenu 后台进程。")
-                .foregroundColor(.secondary)
-                .font(.subheadline)
-            
-            Text("当前状态: \(isEnabled ? "已开启" : "未开启")")
-                .font(.headline)
-                .foregroundColor(isEnabled ? .green : .secondary)
-            
-            Button(isEnabled ? "关闭开机启动" : "开启开机启动") {
-                toggleLoginItem()
+            HStack(spacing: 12) {
+                Image(systemName: isEnabled ? "power.circle.fill" : "power.circle")
+                    .font(.system(size: 36))
+                    .foregroundColor(isEnabled ? .green : .secondary)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("系统登录自启动进程")
+                        .font(.headline)
+                    Text("开机并自动登录 macOS 系统时，是否立即在后台拉起此服务。")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
             }
-            .buttonStyle(.borderedProminent)
+            
+            Divider()
+            
+            HStack {
+                Text("开机自启状态:")
+                    .bold()
+                Text(isEnabled ? "已启用" : "未开启")
+                    .foregroundColor(isEnabled ? .green : .secondary)
+                    .fontWeight(.bold)
+                
+                Spacer()
+                
+                Button(action: {
+                    toggleLoginItem()
+                }) {
+                    Text(isEnabled ? "停用开机自启" : "启用开机自启")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(isEnabled ? Color.red.opacity(0.8) : Color.blue)
+            }
         }
+        .premiumCardStyle()
         .onAppear {
             checkLoginItemStatus()
         }
@@ -520,42 +701,80 @@ struct UpdateView: View {
     @ObservedObject var updateManager = UpdateManager.shared
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("软件启动时会自动静默检测最新版本信息，也可在此处手动触发。")
-                .foregroundColor(.secondary)
-                .font(.subheadline)
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 16) {
+                Image(systemName: "info.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundColor(.blue)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("QuickRightMenu")
+                        .font(.headline)
+                    Text("当前版本: 1.5.7")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            
+            Divider()
             
             if updateManager.updateAvailable {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("发现新版本：\(updateManager.latestVersion)")
-                        .font(.headline)
-                        .foregroundColor(.green)
-                    Text("请点击下方按钮前往下载，下载解压后覆盖替换原 App 即可。")
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(.green)
+                        Text("发现可用的全新版本：\(updateManager.latestVersion)")
+                            .font(.headline)
+                            .foregroundColor(.green)
+                    }
+                    Text("新版包含功能修复与体验优化。可直接点击下方按钮一键前往 GitHub 下载最新安装包覆盖安装。")
                         .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .lineSpacing(4)
                 }
+                .padding(14)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(8)
             } else if updateManager.updateCheckFinished {
-                Text("当前已是最新版本：1.5.7")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .foregroundColor(.green)
+                    Text("您的应用已是最新版本，无需更新。")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
             } else {
-                Text("正在检查更新...")
-                    .font(.headline)
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("正在静默检测云端最新 Release 版本...")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
             }
             
             HStack(spacing: 12) {
-                Button("立即检查") {
+                Button(action: {
                     updateManager.updateCheckFinished = false
                     updateManager.checkForUpdatesSilently()
+                }) {
+                    Label("手动检查更新", systemImage: "arrow.clockwise")
                 }
+                .buttonStyle(.bordered)
                 
-                Button(updateManager.updateAvailable ? "下载新版本" : "打开 Release 页面") {
+                Button(action: {
                     let urlStr = updateManager.updateAvailable ? updateManager.latestDownloadURL : "https://github.com/weaiw/QuickRightMenu/releases/latest"
                     if let url = URL(string: urlStr) {
                         NSWorkspace.shared.open(url)
                     }
+                }) {
+                    Label(updateManager.updateAvailable ? "立即下载新版" : "访问 GitHub 主页", systemImage: "safari")
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(updateManager.updateAvailable ? Color.green : Color.blue)
             }
-            .padding(.top, 8)
         }
+        .premiumCardStyle()
     }
 }
