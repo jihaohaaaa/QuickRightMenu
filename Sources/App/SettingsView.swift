@@ -365,6 +365,17 @@ struct MenuView: View {
                     Label("恢复默认值", systemImage: "arrow.uturn.backward.circle.fill")
                 }
                 .buttonStyle(.bordered)
+                
+                Spacer()
+                
+                Button(action: {
+                    let url = CentralStorage.rootURL
+                    NSWorkspace.shared.selectFile(CentralStorage.configFileURL.path, inFileViewerRootedAtPath: url.path)
+                }) {
+                    Label("打开配置目录", systemImage: "folder")
+                }
+                .buttonStyle(.bordered)
+                .help("在访达中打开 ~/.quickrightmenu/")
             }
             .padding(.bottom, 4)
             
@@ -415,76 +426,256 @@ struct MenuView: View {
 // 3. Templates View
 struct TemplatesView: View {
     @ObservedObject var manager = SettingsManager.shared
-    @State private var selectedExt = "md"
-    @State private var templateContent = ""
+    @State private var selectedTemplateId: String? = nil
     
-    private let extensions = ["txt", "md", "json", "csv", "html", "yaml", "xml", "sh", "py", "js", "ts", "css"]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 12) {
-                Text("选择扩展名:")
-                    .bold()
-                    .font(.subheadline)
-                
-                Picker("", selection: $selectedExt) {
-                    ForEach(extensions, id: \.self) { ext in
-                        Text(ext.uppercased()).tag(ext)
-                    }
-                }
-                .frame(width: 140)
-                .onChange(of: selectedExt, initial: true) { _, newExt in
-                    loadTemplateContent(for: newExt)
-                }
-                
-                Spacer()
-                
-                Button(action: {
-                    let key = "template_\(selectedExt)"
-                    if let defaultVal = manager.defaultSettings()[key] as? String {
-                        templateContent = defaultVal
-                        manager.settings[key] = defaultVal
-                        manager.saveSettings()
-                    }
-                }) {
-                    Label("重置为默认模板", systemImage: "arrow.counterclockwise")
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding(.horizontal, 4)
-            
-            TextEditor(text: $templateContent)
-                .font(.system(.body, design: .monospaced))
-                .padding(12)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
-                .cornerRadius(8)
-                .frame(height: 320)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-            
-            Button(action: {
-                let key = "template_\(selectedExt)"
-                manager.settings[key] = templateContent
-                manager.saveSettings()
-            }) {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                    Text("保存模板内容")
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.blue)
+    private var selectedTemplateBinding: Binding<CustomFileTemplate>? {
+        guard let id = selectedTemplateId,
+              let index = manager.customTemplates.firstIndex(where: { $0.id == id }) else {
+            return nil
         }
-        .premiumCardStyle()
+        return Binding<CustomFileTemplate>(
+            get: {
+                if index < manager.customTemplates.count {
+                    return manager.customTemplates[index]
+                }
+                return CustomFileTemplate(title: "", extensionName: "")
+            },
+            set: { updated in
+                var list = manager.customTemplates
+                if index < list.count {
+                    list[index] = updated
+                    manager.customTemplates = list
+                }
+            }
+        )
     }
     
-    private func loadTemplateContent(for ext: String) {
-        let key = "template_\(ext)"
-        templateContent = manager.settings[key] as? String ?? ""
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            // Left list of templates
+            VStack(spacing: 0) {
+                HStack {
+                    Text("模板列表")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Text("\(manager.customTemplates.count) 项")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                
+                Divider()
+                
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(manager.customTemplates) { tpl in
+                            let isSelected = (tpl.id == selectedTemplateId)
+                            HStack(spacing: 8) {
+                                Toggle("", isOn: Binding(
+                                    get: { tpl.isEnabled },
+                                    set: { newValue in
+                                        var list = manager.customTemplates
+                                        if let idx = list.firstIndex(where: { $0.id == tpl.id }) {
+                                            list[idx].isEnabled = newValue
+                                            manager.customTemplates = list
+                                        }
+                                    }
+                                ))
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .scaleEffect(0.7)
+                                .frame(width: 36)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(tpl.title.isEmpty ? "未命名模板" : tpl.title)
+                                        .font(.subheadline)
+                                        .fontWeight(isSelected ? .semibold : .regular)
+                                        .lineLimit(1)
+                                    
+                                    Text(".\(tpl.extensionName)")
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(Color.blue.opacity(0.12))
+                                        .foregroundColor(.blue)
+                                        .cornerRadius(4)
+                                }
+                                
+                                Spacer()
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedTemplateId = tpl.id
+                            }
+                        }
+                    }
+                    .padding(8)
+                }
+                .frame(minHeight: 340)
+                
+                Divider()
+                
+                // Toolbar: Add & Delete
+                HStack(spacing: 12) {
+                    Button(action: addNewTemplate) {
+                        Image(systemName: "plus")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("新建模板")
+                    
+                    Button(action: deleteSelectedTemplate) {
+                        Image(systemName: "minus")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(selectedTemplateId == nil || manager.customTemplates.count <= 1)
+                    .help("删除所选模板")
+                    
+                    Spacer()
+                    
+                    Button(action: resetToDefault) {
+                        Image(systemName: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("恢复为默认模板")
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .frame(width: 220)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.35))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            
+            // Right detail editor
+            VStack(alignment: .leading, spacing: 14) {
+                if let binding = selectedTemplateBinding {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("模板名称")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                        TextField("例如：Markdown 文档、React 组件", text: binding.title)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("文件扩展名")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                        HStack {
+                            Text(".")
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundColor(.secondary)
+                            TextField("例如：md、tsx、py", text: Binding(
+                                get: { binding.wrappedValue.extensionName },
+                                set: { raw in
+                                    let sanitized = raw.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+                                    binding.wrappedValue.extensionName = sanitized
+                                }
+                            ))
+                            .textFieldStyle(.roundedBorder)
+                        }
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("预填模板内容")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("纯文本 / 源码")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        TextEditor(text: binding.content)
+                            .font(.system(.body, design: .monospaced))
+                            .padding(8)
+                            .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+                            .cornerRadius(8)
+                            .frame(minHeight: 220)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                            )
+                    }
+                    
+                    HStack {
+                        Spacer()
+                        Text("自动保存所有修改")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        Spacer()
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 40))
+                            .foregroundColor(.secondary)
+                        Text("请在左侧选择一个模板，或点击加号新建")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 380)
+                }
+            }
+            .padding(16)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.2))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+        }
+        .onAppear {
+            if selectedTemplateId == nil, let first = manager.customTemplates.first {
+                selectedTemplateId = first.id
+            }
+        }
+    }
+    
+    private func addNewTemplate() {
+        let newTpl = CustomFileTemplate(
+            title: "新模板",
+            extensionName: "txt",
+            content: "",
+            isEnabled: true
+        )
+        var list = manager.customTemplates
+        list.append(newTpl)
+        manager.customTemplates = list
+        selectedTemplateId = newTpl.id
+    }
+    
+    private func deleteSelectedTemplate() {
+        guard let id = selectedTemplateId else { return }
+        var list = manager.customTemplates
+        guard list.count > 1 else { return }
+        if let idx = list.firstIndex(where: { $0.id == id }) {
+            list.remove(at: idx)
+            manager.customTemplates = list
+            selectedTemplateId = list.first?.id
+        }
+    }
+    
+    private func resetToDefault() {
+        let defaultTpl = CustomFileTemplate(title: "纯文本", extensionName: "txt", content: "", isEnabled: true)
+        manager.customTemplates = [defaultTpl]
+        selectedTemplateId = defaultTpl.id
     }
 }
 

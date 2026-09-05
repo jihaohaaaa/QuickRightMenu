@@ -10,11 +10,15 @@
     "clean": "node scripts/clean.ts",
     "start": "node scripts/build.ts --run",
     "run": "node scripts/build.ts --run",
+    "install:app": "node scripts/build.ts --install",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.8",
     "@types/node": "^26.4.1",
+    "cac": "^7.0.0",
+    "ora": "^9.4.1",
+    "picocolors": "^1.1.1",
     "typescript": "^7.0.2"
   }
 }

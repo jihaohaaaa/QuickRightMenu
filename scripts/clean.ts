@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ora from "ora";
+import pc from "picocolors";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,12 +19,14 @@ async function pathExists(targetPath: string): Promise<boolean> {
 }
 
 export async function clean(): Promise<void> {
+  const spinner = ora("Checking build directory...").start();
+
   if (await pathExists(buildDir)) {
-    console.log(`Removing build directory: ${buildDir}`);
+    spinner.text = `Cleaning ${pc.cyan("build/")} directory...`;
     await fs.rm(buildDir, { recursive: true, force: true });
-    console.log("Build directory removed.");
+    spinner.succeed(pc.green("Build directory successfully cleaned."));
   } else {
-    console.log("Build directory already clean.");
+    spinner.info(pc.dim("Build directory is already clean."));
   }
 }
 

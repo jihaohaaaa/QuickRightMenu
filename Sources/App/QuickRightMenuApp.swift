@@ -94,14 +94,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func commandDirectoryURL() -> URL {
-        let path = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Containers/com.liaowenbin.QuickRightMenu.Extension/Data/Library/Application Support/QuickRightMenuCommands")
-        return URL(fileURLWithPath: path)
+        return CentralStorage.commandsDirectoryURL
     }
     
     func log(_ message: String) {
         NSLog("QuickRightMenu App: %@", message)
         let line = "\(Date()) App: \(message)\n"
-        let fileURL = URL(fileURLWithPath: "/tmp/QuickRightMenu.log")
+        let fileURL = CentralStorage.logFileURL
         if let data = line.data(using: .utf8) {
             if let handle = try? FileHandle(forWritingTo: fileURL) {
                 handle.seekToEndOfFile()
@@ -132,8 +131,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         switch command {
         case "create":
-            let extensionName = params["ext"] ?? "txt"
-            let contents = templateForExtension(extensionName)
+            let templateId = params["tid"] ?? ""
+            let fallbackExt = params["ext"] ?? "txt"
+            let (extensionName, contents) = templateForIdOrExtension(templateId: templateId, fallbackExt: fallbackExt)
             createFile(in: directory, baseName: "Untitled", extensionName: extensionName, contents: contents)
         case "copy-path":
             copyToPasteboard(copyValueForMode("path", paths: pathsString, directory: directory), label: "paths")
@@ -165,6 +165,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             previewText(pathsString, directory: directory)
         case "terminal":
             openTerminal(at: directory)
+        case "vscode":
+            openVSCode(paths: pathsString, directory: directory)
         default:
             if command.hasPrefix("copy-to-") {
                 let key = String(command.dropFirst("copy-to-".count))
@@ -180,12 +182,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     // MARK: - Core Functions Implementation
     
-    private func templateForExtension(_ ext: String) -> String {
-        let key = "template_\(ext)"
-        if let stored = SettingsManager.shared.settings[key] as? String {
-            return stored
+    private func templateForIdOrExtension(templateId: String, fallbackExt: String) -> (String, String) {
+        let templates = SettingsManager.shared.customTemplates
+        if !templateId.isEmpty {
+            if let found = templates.first(where: { $0.id == templateId }) {
+                return (found.extensionName, found.content)
+            }
         }
-        return ""
+        if let found = templates.first(where: { $0.extensionName.lowercased() == fallbackExt.lowercased() }) {
+            return (found.extensionName, found.content)
+        }
+        return (fallbackExt, "")
     }
     
     private func createFile(in directory: URL, baseName: String, extensionName: String, contents: String) {
@@ -752,6 +759,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    private func openVSCode(paths pathsString: String, directory: URL) {
+        guard let vscodeURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.microsoft.VSCode") else {
+            showError("未检测到 Visual Studio Code，请确认是否已安装")
+            return
+        }
+        
+        let targetURLs: [URL]
+        let trimmed = pathsString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            let paths = trimmed.components(separatedBy: "\n").filter { !$0.isEmpty }
+            targetURLs = paths.map { URL(fileURLWithPath: $0) }
+        } else {
+            targetURLs = [directory]
+        }
+        
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.open(targetURLs, withApplicationAt: vscodeURL, configuration: configuration) { _, error in
+            if let error = error {
+                self.showError("在 VS Code 中打开失败：\(error.localizedDescription)")
+            }
+        }
+    }
+    
     // MARK: - Alerts Helper
     
     func showError(_ message: String) {
@@ -825,6 +856,78 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 }
 
+// MARK: - Central Storage Configuration
+
+struct CentralStorage {
+    static var userHomeDirectory: String {
+        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+            return String(cString: dir)
+        }
+        return NSHomeDirectory()
+    }
+    
+    static var rootURL: URL {
+        return URL(fileURLWithPath: userHomeDirectory).appendingPathComponent(".quickrightmenu", isDirectory: true)
+    }
+    
+    static var configFileURL: URL {
+        return rootURL.appendingPathComponent("config.json", isDirectory: false)
+    }
+    
+    static var commandsDirectoryURL: URL {
+        return rootURL.appendingPathComponent("commands", isDirectory: true)
+    }
+    
+    static var logFileURL: URL {
+        return rootURL.appendingPathComponent("app.log", isDirectory: false)
+    }
+    
+    static func ensureDirectoriesExist() {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: rootURL, withIntermediateDirectories: true, attributes: nil)
+        try? fm.createDirectory(at: commandsDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+    }
+}
+
+// MARK: - Custom File Template Model
+
+struct CustomFileTemplate: Identifiable, Codable, Equatable {
+    var id: String
+    var title: String
+    var extensionName: String
+    var content: String
+    var isEnabled: Bool
+    
+    init(id: String = UUID().uuidString, title: String, extensionName: String, content: String = "", isEnabled: Bool = true) {
+        self.id = id
+        self.title = title
+        self.extensionName = extensionName
+        self.content = content
+        self.isEnabled = isEnabled
+    }
+    
+    var dictionary: [String: Any] {
+        return [
+            "id": id,
+            "title": title,
+            "extensionName": extensionName,
+            "content": content,
+            "isEnabled": isEnabled
+        ]
+    }
+    
+    static func from(dict: [String: Any]) -> CustomFileTemplate? {
+        guard let title = dict["title"] as? String,
+              let ext = dict["extensionName"] as? String else {
+            return nil
+        }
+        let id = dict["id"] as? String ?? UUID().uuidString
+        let content = dict["content"] as? String ?? ""
+        let isEnabled = dict["isEnabled"] as? Bool ?? true
+        return CustomFileTemplate(id: id, title: title, extensionName: ext, content: content, isEnabled: isEnabled)
+    }
+}
+
 // MARK: - Settings Manager
 
 class SettingsManager: ObservableObject {
@@ -833,12 +936,27 @@ class SettingsManager: ObservableObject {
     @Published var settings: [String: Any] = [:]
     
     private init() {
+        CentralStorage.ensureDirectoriesExist()
         self.settings = loadSettings()
+        saveSettings()
+    }
+    
+    var customTemplates: [CustomFileTemplate] {
+        get {
+            guard let rawList = settings["customTemplates"] as? [[String: Any]] else {
+                return [CustomFileTemplate(title: "纯文本", extensionName: "txt", content: "", isEnabled: true)]
+            }
+            let parsed = rawList.compactMap { CustomFileTemplate.from(dict: $0) }
+            return parsed.isEmpty ? [CustomFileTemplate(title: "纯文本", extensionName: "txt", content: "", isEnabled: true)] : parsed
+        }
+        set {
+            settings["customTemplates"] = newValue.map { $0.dictionary }
+            saveSettings()
+        }
     }
     
     var settingsURL: URL {
-        let path = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Containers/com.liaowenbin.QuickRightMenu.Extension/Data/Library/Application Support/QuickRightMenu/settings.plist")
-        return URL(fileURLWithPath: path)
+        return CentralStorage.configFileURL
     }
     
     func defaultSettings() -> [String: Any] {
@@ -846,23 +964,10 @@ class SettingsManager: ObservableObject {
         for row in featureRows {
             defaults[row.key] = true
         }
-        let templates = [
-            "template_txt": "",
-            "template_md": "# Untitled\n",
-            "template_json": "{\n  \n}\n",
-            "template_csv": "",
-            "template_html": "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Untitled</title>\n</head>\n<body>\n\n</body>\n</html>\n",
-            "template_yaml": "---\n",
-            "template_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<root>\n\n</root>\n",
-            "template_sh": "#!/usr/bin/env bash\nset -euo pipefail\n\n",
-            "template_py": "#!/usr/bin/env python3\n\n",
-            "template_js": "",
-            "template_ts": "",
-            "template_css": ":root {\n  color-scheme: light dark;\n}\n"
+        let initialTemplates = [
+            CustomFileTemplate(title: "纯文本", extensionName: "txt", content: "", isEnabled: true).dictionary
         ]
-        for (k, v) in templates {
-            defaults[k] = v
-        }
+        defaults["customTemplates"] = initialTemplates
         defaults["terminalPreference"] = "terminal"
         defaults["hasSeenPermissionGuide"] = false
         for i in 1...3 {
@@ -874,8 +979,10 @@ class SettingsManager: ObservableObject {
     
     func loadSettings() -> [String: Any] {
         var merged = defaultSettings()
-        if let stored = NSDictionary(contentsOf: settingsURL) as? [String: Any] {
-            for (key, val) in stored {
+        let configURL = CentralStorage.configFileURL
+        if let data = try? Data(contentsOf: configURL),
+           let json = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any] {
+            for (key, val) in json {
                 if merged[key] != nil {
                     merged[key] = val
                 }
@@ -885,14 +992,11 @@ class SettingsManager: ObservableObject {
     }
     
     func saveSettings() {
-        let url = settingsURL
-        let fileManager = FileManager.default
-        try? fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: nil)
-        (settings as NSDictionary).write(to: url, atomically: true)
-        
-        let extURL = URL(fileURLWithPath: (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support/QuickRightMenu/settings.plist"))
-        try? fileManager.createDirectory(at: extURL.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: nil)
-        (settings as NSDictionary).write(to: extURL, atomically: true)
+        CentralStorage.ensureDirectoriesExist()
+        guard let data = try? JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys]) else {
+            return
+        }
+        try? data.write(to: CentralStorage.configFileURL, options: .atomic)
     }
     
     struct FeatureRow: Identifiable {
@@ -903,21 +1007,6 @@ class SettingsManager: ObservableObject {
     }
     
     let featureRows = [
-        FeatureRow(key: "newTxt", title: "新建 TXT", category: "新建文件"),
-        FeatureRow(key: "newMarkdown", title: "新建 Markdown", category: "新建文件"),
-        FeatureRow(key: "newJson", title: "新建 JSON", category: "新建文件"),
-        FeatureRow(key: "newCsv", title: "新建 CSV", category: "新建文件"),
-        FeatureRow(key: "newHtml", title: "新建 HTML", category: "新建文件"),
-        FeatureRow(key: "newYaml", title: "新建 YAML", category: "新建文件"),
-        FeatureRow(key: "newXml", title: "新建 XML", category: "新建文件"),
-        FeatureRow(key: "newShell", title: "新建 Shell", category: "新建文件"),
-        FeatureRow(key: "newPython", title: "新建 Python", category: "新建文件"),
-        FeatureRow(key: "newJavaScript", title: "新建 JavaScript", category: "新建文件"),
-        FeatureRow(key: "newTypeScript", title: "新建 TypeScript", category: "新建文件"),
-        FeatureRow(key: "newCss", title: "新建 CSS", category: "新建文件"),
-        FeatureRow(key: "newWord", title: "新建 Word", category: "新建文件"),
-        FeatureRow(key: "newExcel", title: "新建 Excel", category: "新建文件"),
-        FeatureRow(key: "newPowerPoint", title: "新建 PowerPoint", category: "新建文件"),
         FeatureRow(key: "copyPath", title: "复制路径", category: "基础操作"),
         FeatureRow(key: "copyName", title: "复制文件名", category: "基础操作"),
         FeatureRow(key: "copyParent", title: "复制父目录", category: "基础操作"),
@@ -946,6 +1035,7 @@ class SettingsManager: ObservableObject {
         FeatureRow(key: "textStats", title: "统计字数", category: "文本工具"),
         FeatureRow(key: "textToUtf8", title: "转 UTF-8", category: "文本工具"),
         FeatureRow(key: "textPreview", title: "快速预览纯文本", category: "文本工具"),
+        FeatureRow(key: "vscode", title: "在 VS Code 中打开", category: "基础操作"),
         FeatureRow(key: "terminal", title: "在终端打开", category: "基础操作")
     ]
 }

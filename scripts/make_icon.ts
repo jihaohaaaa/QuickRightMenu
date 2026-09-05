@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import ora, { type Ora } from "ora";
+import pc from "picocolors";
 
 const execFileAsync = promisify(execFile);
 
@@ -15,15 +17,6 @@ const iconsetDir = path.join(resourcesDir, "AppIcon.iconset");
 const icnsPath = path.join(resourcesDir, "AppIcon.icns");
 
 const sizes = [16, 32, 128, 256, 512];
-
-async function pathExists(targetPath: string): Promise<boolean> {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export function drawIcon(size: number): Canvas {
   const scale = size / 1024;
@@ -153,8 +146,10 @@ export async function buildIcnsBinary(
   await fs.writeFile(targetPath, finalBuffer);
 }
 
-export async function generateIcons(): Promise<void> {
-  console.log("Generating app icons...");
+export async function generateIcons(parentSpinner?: Ora): Promise<void> {
+  const spinner = parentSpinner || ora("Generating high-resolution app icons...").start();
+  spinner.text = "Rendering master 1024x1024 vector canvas...";
+
   await fs.mkdir(iconsetDir, { recursive: true });
 
   // Clear existing pngs in iconset asynchronously
@@ -167,7 +162,7 @@ export async function generateIcons(): Promise<void> {
 
   const baseCanvas = drawIcon(1024);
 
-  // Generate multi-scale PNG icons concurrently
+  spinner.text = "Exporting multi-scale PNG assets (16x16 ~ 512x512@2x)...";
   await Promise.all(
     sizes.flatMap((size) => {
       // 1x
@@ -199,7 +194,7 @@ export async function generateIcons(): Promise<void> {
     })
   );
 
-  // Generate ICNS using iconutil if available, otherwise pure async binary
+  spinner.text = "Packing ICNS bundle via iconutil...";
   let generatedViaIconutil = false;
   try {
     await execFileAsync("iconutil", ["-c", "icns", iconsetDir, "-o", icnsPath]);
@@ -209,10 +204,17 @@ export async function generateIcons(): Promise<void> {
   }
 
   if (!generatedViaIconutil) {
+    spinner.text = "Packing ICNS binary fallback...";
     await buildIcnsBinary(baseCanvas, icnsPath);
   }
 
-  console.log(`Icons successfully generated at ${icnsPath}`);
+  if (!parentSpinner) {
+    spinner.succeed(
+      `${pc.green("Icons successfully generated")} ${pc.dim(
+        `(${path.relative(root, icnsPath)})`
+      )}`
+    );
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {

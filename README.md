@@ -12,6 +12,7 @@ The app is implemented with Objective-C and FinderSync, with a small resident me
 - File tools: batch rename
 - Image tools: copy image size, compress images, convert PNG/JPEG/WebP
 - Text tools: word count, convert to UTF-8, quick plain-text preview
+- Launch tools: Open in Terminal, Open in VS Code
 - Settings: menu switches, file templates, favorite folders, terminal preference, login item
 - Flat colored Finder menu icons
 
@@ -33,6 +34,7 @@ pnpm run build
 Available scripts:
 
 - `pnpm run build`: Build the complete application & extension
+- `pnpm run install:app`: Build and install directly to `/Applications` (auto register plugin & restart Finder)
 - `pnpm run build:icon`: Generate high-resolution icons & ICNS asset
 - `pnpm run clean`: Clean the build directory
 - `pnpm run start` / `pnpm run run`: Build and launch the app
@@ -45,15 +47,13 @@ build/QuickRightMenu.app
 
 ## Install Locally
 
-For most users, download the latest `QuickRightMenu-*-macOS.zip` from GitHub Releases, unzip it, move `QuickRightMenu.app` to `/Applications`, open it once, then enable the Finder extension in System Settings if macOS asks.
+For local development builds, simply run:
 
-On first launch, QuickRightMenu opens a permission guide inside the app. Follow it to enable the Finder extension, add Full Disk Access, and restart Finder.
+```bash
+pnpm run install:app
+```
 
-QuickRightMenu also checks GitHub Releases for updates at launch and shows an in-app update page when a newer version is available.
-
-For local development builds:
-
-Copy the built app somewhere stable, then register and enable the FinderSync extension:
+This single command will build the app, copy it to `/Applications`, register and enable the FinderSync extension via `pluginkit`, restart Finder, and open the application.
 
 ```bash
 cp -R build/QuickRightMenu.app /Applications/QuickRightMenu.app

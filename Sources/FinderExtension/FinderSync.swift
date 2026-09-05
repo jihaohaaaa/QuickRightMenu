@@ -1,6 +1,33 @@
 import Cocoa
 import FinderSync
 
+// MARK: - Central Storage Configuration
+
+struct CentralStorage {
+    static var userHomeDirectory: String {
+        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+            return String(cString: dir)
+        }
+        return NSHomeDirectory()
+    }
+    
+    static var rootURL: URL {
+        return URL(fileURLWithPath: userHomeDirectory).appendingPathComponent(".quickrightmenu", isDirectory: true)
+    }
+    
+    static var configFileURL: URL {
+        return rootURL.appendingPathComponent("config.json", isDirectory: false)
+    }
+    
+    static var commandsDirectoryURL: URL {
+        return rootURL.appendingPathComponent("commands", isDirectory: true)
+    }
+    
+    static var logFileURL: URL {
+        return rootURL.appendingPathComponent("app.log", isDirectory: false)
+    }
+}
+
 @objc(FinderSync)
 class FinderSync: FIFinderSync {
     
@@ -30,21 +57,32 @@ class FinderSync: FIFinderSync {
         let createItem = NSMenuItem(title: "新建文件", action: nil, keyEquivalent: "")
         createItem.image = menuIconNamed("doc.badge.plus")
         let createMenu = NSMenu(title: "新建文件")
-        addItem(title: "TXT", key: "newTxt", action: "txt", symbol: "doc.plaintext", toMenu: createMenu)
-        addItem(title: "Markdown", key: "newMarkdown", action: "md", symbol: "doc.text", toMenu: createMenu)
-        addItem(title: "JSON", key: "newJson", action: "json", symbol: "curlybraces", toMenu: createMenu)
-        addItem(title: "CSV", key: "newCsv", action: "csv", symbol: "tablecells", toMenu: createMenu)
-        addItem(title: "HTML", key: "newHtml", action: "html", symbol: "chevron.left.forwardslash.chevron.right", toMenu: createMenu)
-        addItem(title: "YAML", key: "newYaml", action: "yaml", symbol: "doc.text", toMenu: createMenu)
-        addItem(title: "XML", key: "newXml", action: "xml", symbol: "chevron.left.forwardslash.chevron.right", toMenu: createMenu)
-        addItem(title: "Shell", key: "newShell", action: "sh", symbol: "terminal", toMenu: createMenu)
-        addItem(title: "Python", key: "newPython", action: "py", symbol: "chevron.left.forwardslash.chevron.right", toMenu: createMenu)
-        addItem(title: "JavaScript", key: "newJavaScript", action: "js", symbol: "curlybraces", toMenu: createMenu)
-        addItem(title: "TypeScript", key: "newTypeScript", action: "ts", symbol: "curlybraces", toMenu: createMenu)
-        addItem(title: "CSS", key: "newCss", action: "css", symbol: "paintbrush", toMenu: createMenu)
-        addItem(title: "Word", key: "newWord", action: "docx", symbol: "doc.richtext", toMenu: createMenu)
-        addItem(title: "Excel", key: "newExcel", action: "xlsx", symbol: "tablecells", toMenu: createMenu)
-        addItem(title: "PowerPoint", key: "newPowerPoint", action: "pptx", symbol: "rectangle.on.rectangle", toMenu: createMenu)
+        
+        let settings = settingsDictionary()
+        let customTemplates = (settings["customTemplates"] as? [[String: Any]]) ?? [
+            ["id": "default-txt", "title": "纯文本", "extensionName": "txt", "isEnabled": true]
+        ]
+        
+        for tpl in customTemplates {
+            guard let isEnabled = tpl["isEnabled"] as? Bool, isEnabled else { continue }
+            guard let ext = tpl["extensionName"] as? String, !ext.isEmpty else { continue }
+            let id = tpl["id"] as? String ?? UUID().uuidString
+            let title = tpl["title"] as? String ?? ""
+            
+            let displayTitle: String
+            if title.isEmpty || title.lowercased() == ext.lowercased() {
+                displayTitle = ext.uppercased()
+            } else {
+                displayTitle = "\(title) (.\(ext))"
+            }
+            
+            let item = NSMenuItem(title: displayTitle, action: #selector(handleMenuItem(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = "create-custom:\(id):\(ext)"
+            item.image = menuIconNamed("doc.plaintext")
+            createMenu.addItem(item)
+        }
+        
         if createMenu.numberOfItems > 0 {
             createItem.submenu = createMenu
             menu.addItem(createItem)
@@ -118,6 +156,15 @@ class FinderSync: FIFinderSync {
             menu.addItem(textToolsItem)
         }
         
+        if isFeatureEnabled("vscode") {
+            let item = NSMenuItem(title: "在 VS Code 中打开", action: #selector(handleMenuItem(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = "vscode"
+            item.tag = tagForAction("vscode")
+            item.image = loadVSCodeIcon()
+            menu.addItem(item)
+        }
+        
         if isFeatureEnabled("terminal") {
             let item = NSMenuItem(title: "在终端打开", action: #selector(handleMenuItem(_:)), keyEquivalent: "")
             item.target = self
@@ -181,6 +228,25 @@ class FinderSync: FIFinderSync {
         }
     }
     
+    private static var cachedVSCodeIcon: NSImage?
+    
+    private func loadVSCodeIcon() -> NSImage {
+        if let cached = FinderSync.cachedVSCodeIcon {
+            return cached
+        }
+        
+        if let imageURL = Bundle(for: FinderSync.self).url(forResource: "vscode", withExtension: "png"),
+           let image = NSImage(contentsOf: imageURL) {
+            image.size = NSMakeSize(18, 18)
+            FinderSync.cachedVSCodeIcon = image
+            return image
+        }
+        
+        let fallback = menuIconNamed("vscode")
+        FinderSync.cachedVSCodeIcon = fallback
+        return fallback
+    }
+    
     private func menuIconNamed(_ name: String) -> NSImage {
         let canvasSize = NSMakeSize(22, 22)
         let result = NSImage(size: canvasSize)
@@ -233,6 +299,41 @@ class FinderSync: FIFinderSync {
             cursor.line(to: NSMakePoint(rect.origin.x + 10.5, rect.origin.y + 5.8))
             cursor.lineWidth = 1.2
             cursor.stroke()
+            return
+        }
+        
+        if name.contains("vscode") {
+            let x = rect.origin.x
+            let y = rect.origin.y
+            
+            // Background deep blue ribbon
+            NSColor(calibratedRed: 0.05, green: 0.39, blue: 0.61, alpha: 1.0).set()
+            let back = NSBezierPath()
+            back.move(to: NSMakePoint(x + 10.5, y + 1.2))
+            back.line(to: NSMakePoint(x + 3.2, y + 5.8))
+            back.line(to: NSMakePoint(x + 3.2, y + 8.2))
+            back.line(to: NSMakePoint(x + 10.5, y + 12.8))
+            back.close()
+            back.fill()
+            
+            // Middle cyan/blue ribbon
+            NSColor(calibratedRed: 0.0, green: 0.48, blue: 0.80, alpha: 1.0).set()
+            let front = NSBezierPath()
+            front.move(to: NSMakePoint(x + 10.5, y + 12.8))
+            front.line(to: NSMakePoint(x + 13.5, y + 10.5))
+            front.line(to: NSMakePoint(x + 13.5, y + 3.5))
+            front.line(to: NSMakePoint(x + 10.5, y + 1.2))
+            front.close()
+            front.fill()
+            
+            // Highlight overlap facet
+            NSColor(calibratedRed: 0.12, green: 0.54, blue: 0.90, alpha: 1.0).set()
+            let wing = NSBezierPath()
+            wing.move(to: NSMakePoint(x + 10.5, y + 12.8))
+            wing.line(to: NSMakePoint(x + 3.2, y + 8.2))
+            wing.line(to: NSMakePoint(x + 13.5, y + 3.5))
+            wing.close()
+            wing.fill()
             return
         }
         
@@ -376,6 +477,9 @@ class FinderSync: FIFinderSync {
     }
     
     private func tintColorForSymbol(_ name: String) -> NSColor {
+        if name.contains("vscode") {
+            return NSColor(calibratedRed: 0.0, green: 0.48, blue: 0.80, alpha: 1.0)
+        }
         if name.contains("terminal") {
             return NSColor(calibratedRed: 0.16, green: 0.18, blue: 0.22, alpha: 1.0)
         }
@@ -417,12 +521,18 @@ class FinderSync: FIFinderSync {
         let directory = targetDirectory()
         log("menu title=\(sender.title) parent=\(sender.menu?.title ?? "") action=\(action) directory=\(directory.path) selected=\(selectedPathsString())")
         
+        if action.hasPrefix("create-custom:") {
+            let parts = action.components(separatedBy: ":")
+            let tid = parts.count > 1 ? parts[1] : ""
+            let ext = parts.count > 2 ? parts[2] : "txt"
+            sendCreateCommand(templateId: tid, extension: ext, directory: directory)
+            return
+        }
+        
         switch action {
-        case "txt", "md", "json", "csv", "html", "yaml", "xml", "sh", "py", "js", "ts", "css", "docx", "xlsx", "pptx":
-            sendCommand("create", directory: directory, extension: action)
         case "copy-path", "copy-name", "copy-parent", "copy-file-url", "copy-markdown-link",
              "batch-rename", "image-copy-size", "image-compress", "image-convert-png", "image-convert-jpeg", "image-convert-webp",
-             "text-stats", "text-to-utf8", "text-preview", "terminal":
+             "text-stats", "text-to-utf8", "text-preview", "terminal", "vscode":
             sendCommand(action, directory: directory, extension: nil)
         default:
             if action.hasPrefix("copy-to-") || action.hasPrefix("move-to-") {
@@ -464,44 +574,14 @@ class FinderSync: FIFinderSync {
         if title.contains("文件名") { return "copy-name" }
         if title.contains("父目录") { return "copy-parent" }
         if title.contains("路径") { return "copy-path" }
-        
-        if title.contains("TXT") { return "txt" }
-        if title.contains("Markdown") { return "md" }
-        if title.contains("JSON") { return "json" }
-        if title.contains("CSV") { return "csv" }
-        if title.contains("HTML") { return "html" }
-        if title.contains("YAML") { return "yaml" }
-        if title.contains("XML") { return "xml" }
-        if title.contains("Shell") { return "sh" }
-        if title.contains("Python") { return "py" }
-        if title.contains("JavaScript") { return "js" }
-        if title.contains("TypeScript") { return "ts" }
-        if title.contains("CSS") { return "css" }
-        if title.contains("Word") { return "docx" }
-        if title.contains("Excel") { return "xlsx" }
-        if title.contains("PowerPoint") { return "pptx" }
         if title.contains("终端") { return "terminal" }
+        if title.contains("VS Code") || title.contains("vscode") { return "vscode" }
         
         return nil
     }
     
     private func actionTags() -> [String: Int] {
         return [
-            "txt": menuTagBase + 1,
-            "md": menuTagBase + 2,
-            "json": menuTagBase + 3,
-            "csv": menuTagBase + 4,
-            "html": menuTagBase + 5,
-            "yaml": menuTagBase + 6,
-            "xml": menuTagBase + 7,
-            "sh": menuTagBase + 8,
-            "py": menuTagBase + 9,
-            "js": menuTagBase + 10,
-            "ts": menuTagBase + 11,
-            "css": menuTagBase + 12,
-            "docx": menuTagBase + 13,
-            "xlsx": menuTagBase + 14,
-            "pptx": menuTagBase + 15,
             "copy-path": menuTagBase + 20,
             "copy-name": menuTagBase + 21,
             "copy-parent": menuTagBase + 22,
@@ -536,7 +616,8 @@ class FinderSync: FIFinderSync {
             "text-stats": menuTagBase + 80,
             "text-to-utf8": menuTagBase + 81,
             "text-preview": menuTagBase + 82,
-            "terminal": menuTagBase + 90
+            "terminal": menuTagBase + 90,
+            "vscode": menuTagBase + 91
         ]
     }
     
@@ -574,13 +655,12 @@ class FinderSync: FIFinderSync {
     }
     
     private func settingsDictionary() -> [String: Any] {
-        let stored = NSDictionary(contentsOf: settingsURL())
-        return (stored as? [String: Any]) ?? [:]
-    }
-    
-    private func settingsURL() -> URL {
-        let path = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support/QuickRightMenu/settings.plist")
-        return URL(fileURLWithPath: path)
+        let configURL = CentralStorage.configFileURL
+        guard let data = try? Data(contentsOf: configURL),
+              let json = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any] else {
+            return [:]
+        }
+        return json
     }
     
     private func targetDirectory() -> URL {
@@ -596,7 +676,31 @@ class FinderSync: FIFinderSync {
         if let targetedURL = controller.targetedURL() {
             return targetedURL
         }
-        return URL(fileURLWithPath: NSHomeDirectory())
+        return URL(fileURLWithPath: CentralStorage.userHomeDirectory)
+    }
+    
+    private func sendCreateCommand(templateId: String, extension ext: String, directory: URL) {
+        var components = URLComponents()
+        components.scheme = "quickrightmenu"
+        components.host = "create"
+        
+        var queryItems = [
+            URLQueryItem(name: "dir", value: directory.path),
+            URLQueryItem(name: "ext", value: ext),
+            URLQueryItem(name: "tid", value: templateId)
+        ]
+        let paths = selectedPathsString()
+        if !paths.isEmpty {
+            queryItems.append(URLQueryItem(name: "paths", value: paths))
+        }
+        components.queryItems = queryItems
+        
+        guard let url = components.url else {
+            log("command URL build failed")
+            return
+        }
+        
+        writeCommandFile(url.absoluteString)
     }
     
     private func sendCommand(_ command: String, directory: URL, extension ext: String?) {
@@ -623,9 +727,9 @@ class FinderSync: FIFinderSync {
     }
     
     private func writeCommandFile(_ urlString: String) {
-        let directoryPath = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support/QuickRightMenuCommands")
+        let directoryURL = CentralStorage.commandsDirectoryURL
         do {
-            try FileManager.default.createDirectory(atPath: directoryPath, withIntermediateDirectories: true, attributes: nil)
+            try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true, attributes: nil)
         } catch {
             log("command directory create failed \(error.localizedDescription)")
             return
@@ -634,8 +738,7 @@ class FinderSync: FIFinderSync {
         let filename = String(format: "command-%lld-%u.cmd",
                               Int64(Date().timeIntervalSince1970 * 1000),
                               arc4random_uniform(1000000))
-        let filePath = (directoryPath as NSString).appendingPathComponent(filename)
-        let fileURL = URL(fileURLWithPath: filePath)
+        let fileURL = directoryURL.appendingPathComponent(filename)
         do {
             try urlString.write(to: fileURL, atomically: true, encoding: .utf8)
             log("write command file \(fileURL.path) \(urlString)")
@@ -652,7 +755,7 @@ class FinderSync: FIFinderSync {
     
     private func log(_ message: String) {
         let line = "\(Date()) Extension: \(message)\n"
-        let fileURL = URL(fileURLWithPath: "/tmp/QuickRightMenu.log")
+        let fileURL = CentralStorage.logFileURL
         if let data = line.data(using: .utf8) {
             if let handle = try? FileHandle(forWritingTo: fileURL) {
                 handle.seekToEndOfFile()
