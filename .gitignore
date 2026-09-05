@@ -6,3 +6,4 @@ dist/
 DerivedData/
 *.swp
 *.tmp
+node_modules/

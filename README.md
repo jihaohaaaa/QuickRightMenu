@@ -21,13 +21,21 @@ Requirements:
 
 - macOS 13 or later
 - Xcode Command Line Tools
-- Python 3 with Pillow, used only to regenerate the app icon
+- Node.js & pnpm
 
 Build:
 
 ```bash
-./scripts/build.sh
+pnpm install
+pnpm run build
 ```
+
+Available scripts:
+
+- `pnpm run build`: Build the complete application & extension
+- `pnpm run build:icon`: Generate high-resolution icons & ICNS asset
+- `pnpm run clean`: Clean the build directory
+- `pnpm run start` / `pnpm run run`: Build and launch the app
 
 The built app is generated at:
 

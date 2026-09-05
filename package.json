@@ -1,0 +1,20 @@
+{
+  "name": "quickrightmenu",
+  "version": "1.0.0",
+  "description": "macOS Finder contextual right-click menu extension and settings app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "build:icon": "node scripts/make_icon.ts",
+    "clean": "node scripts/clean.ts",
+    "start": "node scripts/build.ts --run",
+    "run": "node scripts/build.ts --run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^1.0.8",
+    "@types/node": "^26.4.1",
+    "typescript": "^7.0.2"
+  }
+}
